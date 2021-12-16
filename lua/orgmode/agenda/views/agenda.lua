@@ -49,7 +49,7 @@ local function sort_agenda_items(agenda_items)
       return a.headline:get_priority_sort_value() > b.headline:get_priority_sort_value()
     end
 
-    if a.headline_date:is_same(a.date, b.date) then
+    if a.headline_date:is_same(b.date) then
       if a.headline:get_category() ~= b.headline:get_category() then
         print(category_inds[a.headline:get_category()] < category_inds[b.headline:get_category()])
         return category_inds[a.headline:get_category()] < category_inds[b.headline:get_category()]
