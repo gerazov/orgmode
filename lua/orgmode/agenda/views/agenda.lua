@@ -12,13 +12,9 @@ local function get_category_inds()
   local files = config:get_all_files()
   local categories = config:get_categories(files)
   local category_inds = {}
-  local vim = vim
   for i, category in ipairs(categories) do
     category_inds[category] = i
   end
-  print(vim.inspect(files))
-  print(vim.inspect(categories))
-  print(vim.inspect(category_inds))
   return category_inds
 end
 
