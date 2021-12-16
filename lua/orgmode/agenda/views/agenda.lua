@@ -33,10 +33,6 @@ local function sort_agenda_items(agenda_items)
       return false
     end
 
-    if a.headline:get_category() ~= b.headline:get_category() then
-      return category_inds[a.headline:get_category()] < category_inds[b.headline:get_category()]
-    end
-
     if a.is_same_day and not b.is_same_day then
       if not a.headline_date.date_only or (b.headline_date:is_none() and not a.headline_date:is_none()) then
         return true
@@ -51,6 +47,11 @@ local function sort_agenda_items(agenda_items)
 
     if a.headline:get_priority_sort_value() ~= b.headline:get_priority_sort_value() then
       return a.headline:get_priority_sort_value() > b.headline:get_priority_sort_value()
+    end
+
+    if a.headline:get_category() ~= b.headline:get_category() then
+      print(category_inds[a.headline:get_category()] < category_inds[b.headline:get_category()])
+      return category_inds[a.headline:get_category()] < category_inds[b.headline:get_category()]
     end
 
     return a.headline_date:is_before(b.headline_date)
