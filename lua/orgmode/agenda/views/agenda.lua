@@ -33,10 +33,8 @@ local function sort_agenda_items(agenda_items)
       return false
     end
 
-    if a.is_same_day and b.is_same_day then
-      if a.headline:get_category() ~= b.headline:get_category() then
-        return category_inds[a.headline:get_category()] < category_inds[b.headline:get_category()]
-      end
+    if a.headline:get_category() ~= b.headline:get_category() then
+      return category_inds[a.headline:get_category()] < category_inds[b.headline:get_category()]
     end
 
     if a.is_same_day and not b.is_same_day then
