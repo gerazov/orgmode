@@ -49,7 +49,7 @@ hi def link org_comment Comment
 " 1) list item
 " a. list item
 " a) list item
-syn match org_list_ordered "^\s*\(\a\|\d\+\)[.)]\(\s\|$\)" nextgroup=org_list_item
+syn match org_list_ordered "^\s*\(\a\|\d\+\)[.)]\ze\(\s\|$\)" nextgroup=org_list_item
 hi def link org_list_ordered Identifier
 
 " Unordered Lists:
@@ -57,7 +57,7 @@ hi def link org_list_ordered Identifier
 " * list item
 " + list item
 " + and - don't need a whitespace prefix
-syn match org_list_unordered "^\(\s*[-+]\|\s\+\*\)\(\s\|$\)" nextgroup=org_list_item
+syn match org_list_unordered "^\(\s*[-+]\|\s\+\*\)\ze\(\s\|$\)" nextgroup=org_list_item
 hi def link org_list_unordered Identifier
 
 " Definition Lists:
@@ -66,7 +66,7 @@ hi def link org_list_unordered Identifier
 syntax match org_list_def /.*\s\+::/ contained
 hi def link org_list_def PreProc
 
-syntax match org_list_item /.*$/ contained contains=org_bold,org_italic,org_underline,org_code,org_verbatim,org_strike
+syntax match org_list_item /.*$/ contained contains=org_bold,org_italic,org_underline,org_code,org_verbatim,org_strike,@Spell
 
 " Block Delimiters: {{{1
 syntax case ignore

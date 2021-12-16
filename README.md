@@ -75,7 +75,7 @@ local parser_config = require "nvim-treesitter.parsers".get_parser_configs()
 parser_config.org = {
   install_info = {
     url = 'https://github.com/milisims/tree-sitter-org',
-    revision = 'main',
+    revision = 'f110024d539e676f25b72b7c80b0fd43c34264ef',
     files = {'src/parser.c', 'src/scanner.cc'},
   },
   filetype = 'org',
@@ -105,7 +105,7 @@ local parser_config = require "nvim-treesitter.parsers".get_parser_configs()
 parser_config.org = {
   install_info = {
     url = 'https://github.com/milisims/tree-sitter-org',
-    revision = 'main',
+    revision = 'f110024d539e676f25b72b7c80b0fd43c34264ef',
     files = {'src/parser.c', 'src/scanner.cc'},
   },
   filetype = 'org',
@@ -131,6 +131,8 @@ EOF
 * **Open agenda prompt**: <kbd>\<Leader\>oa</kbd>
 * **Open capture prompt**: <kbd>\<Leader\>oc</kbd>
 * In any orgmode buffer press <kbd>g?</kbd> for help
+
+If you are new to Orgmode, see [Getting started](/DOCS.md#getting-started-with-orgmode) section in Docs.
 
 ### Completion
 If you use [nvim-compe](https://github.com/hrsh7th/nvim-compe) and want
@@ -239,6 +241,9 @@ start the command `:language ` and press `<TAB>` to autocomplete possible option
   * Insert/Move/Refile headlines
   * Change tags
   * Toggle checkbox state
+* Clocking time
+* Remote editing from agenda view
+* Repeatable mapping via [vim-repeat](https://github.com/tpope/vim-repeat)
 
 ### Features (Detailed breakdown):
 * Agenda prompt:
@@ -338,7 +343,7 @@ Parsing is done via builtin tree-sitter parser and [tree-sitter-org](https://git
 * [ ] Improve checkbox hierarchy
 * [X] Support todo keyword faces
 * [X] Support clocking work time
-* [ ] Improve folding
+* [X] Improve folding
 * [X] Support exporting (via existing emacs tools)
 * [ ] Support archiving to specific headline
 * [ ] Support tables

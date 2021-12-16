@@ -18,6 +18,8 @@ function M.link_ts_highlights()
     OrgTSHeadlineLevel8 = 'OrgHeadlineLevel8',
     OrgTSBullet = 'Identifier',
     OrgTSCheckbox = 'PreProc',
+    orgTSSubscript = 'Comment',
+    orgTSSuperscript = 'Comment',
     OrgTSCheckboxHalfChecked = 'OrgTSCheckbox',
     OrgTSCheckboxUnchecked = 'OrgTSCheckbox',
     OrgTSCheckboxChecked = 'OrgTSCheckbox',
@@ -27,6 +29,16 @@ function M.link_ts_highlights()
     OrgTSPlan = 'Constant',
     OrgTSComment = 'Comment',
     OrgTSDirective = 'Comment',
+  }
+
+  for src, def in pairs(links) do
+    vim.cmd(string.format([[hi def link %s %s]], src, def))
+  end
+end
+
+function M.link_highlights()
+  local links = {
+    OrgEditSrcHighlight = 'Visual',
   }
 
   for src, def in pairs(links) do
@@ -121,6 +133,8 @@ function M.define_highlights()
   if config:ts_highlights_enabled() then
     M.link_ts_highlights()
   end
+
+  M.link_highlights()
 
   local faces = M.define_org_todo_keyword_colors(true)
   return M.define_org_headline_colors(faces)
