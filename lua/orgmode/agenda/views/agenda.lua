@@ -45,7 +45,7 @@ local function sort_agenda_items(agenda_items)
       end
     end
 
-    if a.date == b.date then
+    if a.headline_date:is_same(a.date, b.date) then
       if a.headline:get_priority_sort_value() ~= b.headline:get_priority_sort_value() then
         return a.headline:get_priority_sort_value() > b.headline:get_priority_sort_value()
       end
