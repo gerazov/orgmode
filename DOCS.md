@@ -14,17 +14,18 @@
    6. [Edit Src mappings](#edit-src)
    7. [Text objects](#text-objects)
    8. [Dot repeat](#dot-repeat)
-4. [Document Diagnostics](#document-diagnostics)
-5. [Tables](#tables)
-6. [Hyperlinks](#hyperlinks)
-7. [Autocompletion](#autocompletion)
-8. [Abbreviations](#abbreviations)
-9. [Formatting](#formatting)
-10. [Colors](#colors)
-11. [Advanced search](#advanced-search)
-12. [Notifications (experimental)](#notifications-experimental)
-13. [Clocking](#clocking)
-14. [Changelog](#changelog)
+4. [Tables](#tables)
+5. [Hyperlinks](#hyperlinks)
+6. [Autocompletion](#autocompletion)
+7. [Abbreviations](#abbreviations)
+8. [Formatting](#formatting)
+9. [User interface](#user-interface)
+    1. [Colors](#colors)
+    2. [Menu](#menu)
+10. [Advanced search](#advanced-search)
+11. [Notifications (experimental)](#notifications-experimental)
+12. [Clocking](#clocking)
+13. [Changelog](#changelog)
 
 ## Getting started with Orgmode
 To get a basic idea how Orgmode works, look at this screencast from [@dhruvasagar](https://github.com/dhruvasagar)
@@ -72,11 +73,6 @@ Examples (With fast access):
   * `{'TODO(t)', 'NEXT', '|', 'DONE'}` - will work same as above. Only one todo keyword needs to have fast access key, others will be parsed from first char.
 
 NOTE: Make sure fast access keys do not overlap. If that happens, first entry in list gets it.
-
-#### **diagnostics**
-*type*: `boolean`<br />
-*default value*: `true`<br />
-Should error diagnostics be shown. If you are using Neovim 0.6.0 or higher, these will be shown via `vim.diagnostic`.<br />
 
 #### **win_split_mode**
 *type*: `string|function|table`<br />
@@ -132,6 +128,41 @@ Always open horizontally with specific height of 20 lines:
 win_split_mode = '20split'
 ```
 
+#### **win_border**
+*type*: `string|string[]`<br />
+*default value*: `single`<br />
+Border style of floating windows.<br />
+Available options:
+* `none` - No border (default)
+* `single` - A single line box
+* `double` - A double line box
+* `rounded` - Like "single", but with rounded corners ("╭" etc.)
+* `solid` - Adds padding by a single whitespace cell
+* `shadow` - A drop shadow effect by blending with the background
+* `{'╔', '═' ,'╗', '║', '╝', '═', '╚', '║' }` - Specify border characters in a clock-wise fashion
+* `{'/', '-', '\\', '|' }` - If less than eight chars the chars will start repeating
+
+See `:help nvim_open_win()`
+
+Applies to:
+    always
+        - calendar pop-up
+        - help pop-up
+        - notification pop-up
+    `win_split_mode` is set to `float`
+        - agenda window
+        - capture window
+
+#### **org_startup_folded**
+*type*: `string`<br />
+*default value*: `overview`<br />
+How many headings and other foldable items should be shown when an org file is opened.<br />
+Available options:
+* `overview` - Only show top level elements (default)
+* `content` - Only show the first two levels
+* `showeverything` - Show all elements
+* `inherit` - Use the fold level set in Neovim's global `foldlevel` option
+
 #### **org_todo_keyword_faces**
 *type*: `table<string, string>`<br />
 *default value*: `{}`<br />
@@ -139,7 +170,7 @@ Custom colors for todo keywords.<br />
 Available options:
 * foreground - `:foreground hex/colorname`. Examples: `:foreground #FF0000`, `:foreground blue`
 * background - `:background hex/colorname`. Examples: `:background #FF0000`, `:background blue`
-* weight - `:weight bold`.
+* weight - `:weight bold`
 * underline - `:underline on`
 * italic - `:slant italic`
 
@@ -214,6 +245,13 @@ Possible values:
 * `time` - adds `CLOSED` date when marking headline as done
 * `note` - adds `CLOSED` date as above, and prompts for closing note via capture window. Confirm note with `org_note_finalize` (Default `<C-c>`), or ignore providing note via `org_note_kill` (Default `<Leader>ok`)
 * `nil|false` - Disable any logging
+
+#### **org_log_into_drawer**
+*type*: `string|nil`<br />
+*default value*: `nil`<br />
+Possible values:
+Log TODO state changes into a drawer with the given name. The recommended value is `LOGBOOK`.
+If `nil`, log into the section body.
 
 #### **org_highlight_latex_and_related**
 *type*: `string|nil`<br />
@@ -374,6 +412,16 @@ Variables:
   * `%^{PROMPT|DEFAULT|COMPLETION...}`: Prompt for input, if completion is provided an :h inputlist will be used
   * `%(EXP)`: Runs the given lua code and inserts the result. NOTE: this will internally pass the content to the lua `load()` function. So the body inside `%()` should be the body of a function that returns a string.
 
+Templates have the following fields:
+  * `description` (`string`) — description of the template that is displayed in the template selection menu
+  * `template` (`string|string[]`) — body of the template that will be used when creating capture
+  * `target` (`string?`) — name of the file to which the capture content will be added. If the target is not specified, the content will be added to the [`org_default_notes_file`](#orgdefaultnotesfile) file
+  * `headline` (`string?`) — title of the headline after which the capture content will be added. If no headline is specified, the content will be appended to the end of the file
+  * `properties` (`table?`):
+    * `empty_lines` (`table|number?`) — if the value is a number, then empty lines are added before and after the content. If the value is a table, then the following fields are expected:
+      * `before` (`integer?`) — add empty lines to the beginning of the content
+      * `after` (`integer?`) — add empty lines to the end of the content
+
 Example:<br />
   ```lua
   { T = {
@@ -385,11 +433,24 @@ Example:<br />
 
 Journal example:<br />
   ```lua
-  { j = {
-    description = 'Journal',
-    template = '\n*** %<%Y-%m-%d> %<%A>\n**** %U\n\n%?',
-    target = '~/sync/org/journal.org'
-  } }
+  {
+    j = {
+      description = 'Journal',
+      template = '\n*** %<%Y-%m-%d> %<%A>\n**** %U\n\n%?',
+      target = '~/sync/org/journal.org'
+    },
+  }
+  ```
+
+Journal example with dynamic target, i.e. a separate file per month:<br />
+  ```lua
+  {
+    J = {
+      description = 'Journal',
+      template = '\n*** %<%Y-%m-%d> %<%A>\n**** %U\n\n%?',
+      target = '~/sync/org/journal/%<%Y-%m>.org'
+    },
+  }
   ```
 
 Nested key example:<br />
@@ -409,16 +470,38 @@ Nested key example:<br />
       headline = 'one-time'
     }
   }
+  -- or
+  {
+    e = {
+      description = 'Event',
+      subtemplates = {
+        r = {
+          description = 'recurring',
+          template = '** %?\n %T',
+          target = '~/org/calendar.org',
+          headline = 'recurring'
+        },
+        o = {
+          description = 'one-time',
+          template = '** %?\n %T',
+          target = '~/org/calendar.org',
+          headline = 'one-time'
+        },
+      },
+    },
+  }
   ```
 
 Lua expression example:<br />
   ```lua
-  { j = {
-    description = 'Journal',
-    template = '* %(return vim.fn.getreg "w")',
-    -- get the content of register "w"
-    target = '~/sync/org/journal.org'
-  } }
+  { 
+    j = {
+      description = 'Journal',
+      template = '* %(return vim.fn.getreg "w")',
+      -- get the content of register "w"
+      target = '~/sync/org/journal.org'
+    },
+  }
   ```
 
 #### **org_agenda_min_height**
@@ -712,7 +795,7 @@ require('orgmode').setup({
 })
 ```
 
-### Closing note mappings
+### Note mappings
 
 Mappings used in closing note window.
 
@@ -792,6 +875,9 @@ Toggle current line checkbox state
 #### **org_toggle_heading**
 *mapped to*: `<Leader>o*`<br />
 Toggle current line to headline and vice versa. Checkboxes will turn into TODO headlines.
+#### **org_insert_link**
+*mapped to*: `<Leader>oil`<br />
+Insert a hyperlink at cursor position. When the cursor is on a hyperlink, edit that hyperlink.<br />
 #### **org_open_at_point**
 *mapped to*: `<Leader>oo`<br />
 Open hyperlink or date under cursor. When date is under the cursor, open the agenda for that day.<br />
@@ -990,10 +1076,6 @@ require('orgmode').setup({
 ### Dot repeat
 To make all mappings dot repeatable, install [vim-repeat](https://github.com/tpope/vim-repeat) plugin.
 
-## Document Diagnostics
-Since tree-sitter parser is being used to parse the file, if there are some syntax errors,
-it can potentially fail to parse specific parts of document when needed.
-
 ## Tables
 Tables can be formatted via built in `formatexpr` (see `:help gq`)
 
@@ -1086,9 +1168,9 @@ Some content [[|
 `org` buffers have access to two abbreviations:
 
 * `:today:` - expands to today's date (example: `<2021-06-29 Tue>`)
-* `:itoday:` - expands to an invactive version of today's date (example: `[2021-06-29 Tue]`)
+* `:itoday:` - expands to an inactive version of today's date (example: `[2021-06-29 Tue]`)
 * `:now:` - expands to today's date and current time (example: `<2021-06-29 Tue 15:32>`)
-* `:inow:` - expands to invactive version of today's date and current time (example: `[2021-06-29 Tue 15:32]`)
+* `:inow:` - expands to inactive version of today's date and current time (example: `[2021-06-29 Tue 15:32]`)
 
 ## Formatting
 Formatting is done via `gq` mapping, which uses `formatexpr` under the hood (see `:help formatexpr` for more info).
@@ -1102,7 +1184,9 @@ Currently, these things are formatted:
 * Tables are formatted (see [Tables](#Tables) for more info)
 * Clock entries total time is recalculated (see [Recalculating totals](#recalculating-totals) in [Clocking](#Clocking) section)
 
-## Colors
+## User interface
+
+### Colors
 Colors used for todo keywords and agenda states (deadline, schedule ok, schedule warning)
 are parsed from the current colorsheme from several highlight groups (Error, WarningMsg, DiffAdd, etc.).
 If those colors are not suitable you can override them like this:
@@ -1129,7 +1213,7 @@ endfunction
 
 For adding/changing TODO keyword colors see [org-todo-keyword-faces](#org_todo_keyword_faces)
 
-### Highlight Groups
+#### Highlight Groups
 
 * The following highlight groups are based on _Treesitter_ query results, hence when setting up _Orgmode_ these
   highlights must be enabled by removing `disable = {'org'}` from the default recommended _Treesitter_ configuration.
@@ -1163,6 +1247,76 @@ For adding/changing TODO keyword colors see [org-todo-keyword-faces](#org_todo_k
   * `OrgAgendaDeadline`: A item deadline in the agenda view
   * `OrgAgendaScheduled`: A scheduled item in the agenda view
   * `OrgAgendaScheduledPast`: A item past its scheduled date in the agenda view
+
+### Menu
+
+The menu is used when selecting further actions in `agenda`, `capture` and `export`. Here is an example of the menu you see when opening `agenda`:
+
+```
+Press key for an agenda command
+-------------------------------
+a Agenda for current week or day
+t List of all TODO entries
+m Match a TAGS/PROP/TODO query
+M Like m, but only for TODO entries
+s Search for keywords
+q Quit
+```
+Users have the option to change the appearance of this menu. To do this, you need to add a handler in the UI configuration section:
+```lua
+require("orgmode").setup({
+  ui = {
+    menu = {
+      handler = function(data)
+        -- your handler here, for example:
+        local options = {}
+        local options_by_label = {}
+
+        for _, item in ipairs(data.items) do
+          -- Only MenuOption has `key`
+          -- Also we don't need `Quit` option because we can close the menu with ESC
+          if item.key and item.label:lower() ~= "quit" then
+            table.insert(options, item.label)
+            options_by_label[item.label] = item
+          end
+        end
+
+        local handler = function(choice)
+          if not choice then
+            return
+          end
+
+          local option = options_by_label[choice]
+          if option.action then
+            option.action()
+          end
+        end
+
+        vim.ui.select(options, {
+          propmt = data.propmt,
+        }, handler)
+      end,
+    },
+  },
+})
+```
+When the menu is called, the handler receives a table `data` with the following fields as input:
+* `title` (`string`) — menu title
+* `items` (`table`) — array containing `MenuItem` (see below)
+* `prompt` (`string`) — prompt text used to prompt a keystroke
+
+Each menu item `MenuItem` is one of two types: `MenuOption` and `MenuSeparator`.
+
+`MenuOption` is a table containing the following fields:
+* `label` (`string`) — description of the action
+* `key` (`string`) — key that will be processed when the keys are pressed in the menu
+* `action` (`function` *optional*) — handler that will be called when the `key` is pressed in the menu.
+
+`MenuSeparator` is a table containing the following fields:
+* `icon` (`string` *optional*) — character used as separator. The default character is `-`
+* `length` (`number` *optional*) — number of repetitions of the separator character. The default length is 80
+
+In order for the menu to work as expected, the handler must call `action` from `MenuItem`.
 
 ## Advanced search
 Part of [Advanced search](https://orgmode.org/worg/org-tutorials/advanced-searching.html) functionality
@@ -1290,7 +1444,7 @@ In order to trigger notifications via cron, job needs to be added to the crontab
 This is currently possible only on Linux and MacOS, since I don't know how would this be done on Windows. Any help on this topic is appreciated. <br />
 This works by starting the headless Neovim instance, running one off function inside orgmode, and quitting the Neovim.
 
-Here's maximum simplified **Linux** example (Tested on Manjaro/Arch), but least optimized:
+Here's maximum simplified **Linux** example (Tested on Manjaro/Arch/Ubuntu), but least optimized:
 
 Run this to open crontab:
 ```

@@ -180,26 +180,17 @@ function Files.update_file(filename, action)
   local is_same_file = filename == utils.current_file_path()
   local cur_win = vim.api.nvim_get_current_win()
   if is_same_file then
-    return utils.promisify(action(file)):next(function(result)
+    return Promise.resolve(action(file)):next(function(result)
       vim.cmd(':silent! w')
       return result
     end)
   end
 
-  local bufnr = vim.fn.bufadd(filename)
-  vim.api.nvim_open_win(bufnr, true, {
-    relative = 'editor',
-    width = 1,
-    height = 1,
-    row = 99999,
-    col = 99999,
-    zindex = 1,
-    style = 'minimal',
-  })
+  local edit_file = utils.edit_file(filename)
+  edit_file.open()
 
-  return utils.promisify(action(file)):next(function(result)
-    vim.cmd('silent! wq!')
-    vim.api.nvim_set_current_win(cur_win)
+  return Promise.resolve(action(file)):next(function(result)
+    edit_file.close()
     return result
   end)
 end
@@ -221,7 +212,7 @@ function Files.find_headlines_matching_search_term(term, no_escape, search_extra
 end
 
 ---@param id? number
----@return Section
+---@return Section?
 function Files.get_closest_headline(id)
   local current_file = Files.get_current_file()
   local msg = 'Make sure there are no errors in the document'

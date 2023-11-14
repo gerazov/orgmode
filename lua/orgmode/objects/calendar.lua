@@ -19,7 +19,7 @@ local Calendar = {
   clearable = false,
 }
 
-vim.cmd([[hi OrgCalendarToday gui=reverse cterm=reverse]])
+vim.cmd([[hi default OrgCalendarToday gui=reverse cterm=reverse]])
 
 ---@param data table
 function Calendar.new(data)
@@ -43,7 +43,7 @@ function Calendar.open()
     width = width,
     height = Calendar.clearable and height + 1 or height,
     style = 'minimal',
-    border = 'single',
+    border = config.win_border,
     row = vim.o.lines / 2 - (y_offset + height) / 2,
     col = vim.o.columns / 2 - (x_offset + width) / 2,
   }
@@ -71,7 +71,7 @@ function Calendar.open()
   vim.api.nvim_buf_set_var(Calendar.buf, 'indent_blankline_enabled', false)
   vim.api.nvim_buf_set_option(Calendar.buf, 'bufhidden', 'wipe')
 
-  local map_opts = { buffer = Calendar.buf, silent = true }
+  local map_opts = { buffer = Calendar.buf, silent = true, nowait = true }
 
   vim.keymap.set('n', 'j', '<cmd>lua require("orgmode.objects.calendar").cursor_down()<cr>', map_opts)
   vim.keymap.set('n', 'k', '<cmd>lua require("orgmode.objects.calendar").cursor_up()<cr>', map_opts)
@@ -81,6 +81,7 @@ function Calendar.open()
   vim.keymap.set('n', '<', '<cmd>lua require("orgmode.objects.calendar").backward()<CR>', map_opts)
   vim.keymap.set('n', '<CR>', '<cmd>lua require("orgmode.objects.calendar").select()<CR>', map_opts)
   vim.keymap.set('n', '.', '<cmd>lua require("orgmode.objects.calendar").reset()<CR>', map_opts)
+  vim.keymap.set('n', 'i', '<cmd>lua require("orgmode.objects.calendar").read_date()<CR>', map_opts)
   vim.keymap.set('n', 'q', ':call nvim_win_close(win_getid(), v:true)<CR>', map_opts)
   vim.keymap.set('n', '<Esc>', ':call nvim_win_close(win_getid(), v:true)<CR>', map_opts)
   if Calendar.clearable then
@@ -136,16 +137,17 @@ function Calendar.render()
   local content = vim.tbl_map(function(item)
     return ' ' .. table.concat(item, '   ') .. ' '
   end, cal_rows)
-  weekday_row = ' ' .. table.concat(weekday_row, '  ')
 
   -- put it all together
-  table.insert(content, 1, weekday_row)
+  table.insert(content, 1, ' ' .. table.concat(weekday_row, '  '))
   table.insert(content, 1, title)
   -- TODO: redundant, since it's static data
   table.insert(content, ' [<] - prev month  [>] - next month')
   table.insert(content, ' [.] - today   [Enter] - select day')
   if Calendar.clearable then
-    table.insert(content, ' [r] Clear date')
+    table.insert(content, ' [i] - enter date  [r] - clear date')
+  else
+    table.insert(content, ' [i] - enter date')
   end
 
   vim.api.nvim_buf_set_lines(Calendar.buf, 0, -1, true, content)
@@ -264,7 +266,7 @@ function Calendar.reset()
   vim.fn.search(today:format('%d'), 'W')
 end
 
-function Calendar.select()
+function Calendar.get_selected_date()
   local col = vim.fn.col('.')
   local char = vim.fn.getline('.'):sub(col, col)
   local day = vim.trim(vim.fn.expand('<cword>'))
@@ -274,7 +276,11 @@ function Calendar.select()
     return utils.echo_warning('Please select valid day number.', nil, false)
   end
   day = tonumber(day)
-  local selected_date = Calendar.month:set({ day = day })
+  return Calendar.month:set({ day = day })
+end
+
+function Calendar.select()
+  local selected_date = Calendar.get_selected_date()
   local cb = Calendar.callback
   Calendar.callback = nil
   vim.cmd([[echon]])
@@ -298,6 +304,23 @@ function Calendar.clear_date()
   vim.cmd([[echon]])
   vim.api.nvim_win_close(0, true)
   cb(nil, true)
+end
+
+function Calendar.read_date()
+  vim.ui.input({ prompt = 'Enter date: ' }, function(result)
+    if result then
+      local date = Date.from_string(result)
+      if not date then
+        date = Calendar.get_selected_date():adjust(result)
+      end
+
+      Calendar.date = date
+      Calendar.month = date:set({ day = 1 })
+      Calendar.render()
+      vim.fn.cursor(2, 0)
+      vim.fn.search(date:format('%d'), 'W')
+    end
+  end)
 end
 
 return Calendar

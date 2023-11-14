@@ -20,12 +20,34 @@ local time_format = '%H:%M'
 ---@field min number
 ---@field timestamp number
 ---@field timestamp_end number
+---@field is_dst boolean
 ---@field is_date_range_start boolean
 ---@field is_date_range_end boolean
 ---@field related_date_range Date
 ---@field dayname string
 ---@field adjustments string[]
-local Date = {}
+local Date = {
+  ---@type fun(this: Date, other: Date): boolean
+  __eq = function(this, other)
+    return this.timestamp == other.timestamp
+  end,
+  ---@type fun(this: Date, other: Date): boolean
+  __lt = function(this, other)
+    return this.timestamp < other.timestamp
+  end,
+  ---@type fun(this: Date, other: Date): boolean
+  __le = function(this, other)
+    return this.timestamp <= other.timestamp
+  end,
+  ---@type fun(this: Date, other: Date): boolean
+  __gt = function(this, other)
+    return this.timestamp > other.timestamp
+  end,
+  ---@type fun(this: Date, other: Date): boolean
+  __ge = function(this, other)
+    return this.timestamp >= other.timestamp
+  end,
+}
 
 ---@param source table
 ---@param target? table
@@ -56,6 +78,7 @@ function Date:new(data)
   opts.timestamp = os.time(opts)
   opts.date_only = date_only
   opts.dayname = os.date('%a', opts.timestamp)
+  opts.is_dst = os.date('*t', opts.timestamp).isdst
   opts.adjustments = data.adjustments or {}
   opts.timestamp_end = data.timestamp_end
   opts.is_date_range_start = data.is_date_range_start or false
@@ -164,6 +187,12 @@ local function today(data)
   local opts = vim.tbl_deep_extend('force', os.date('*t', os.time()), data or {})
   opts.date_only = true
   return Date:new(opts)
+end
+
+---@return Date
+local function tomorrow()
+  local today_date = today()
+  return today_date:adjust('+1d')
 end
 
 ---@param data? table
@@ -288,19 +317,15 @@ end
 
 ---@return string
 function Date:to_string()
-  local date = ''
   local format = date_format
   if self.dayname then
     format = format .. ' %a'
   end
 
-  if self.date_only then
-    date = os.date(format, self.timestamp)
-  else
-    date = os.date(format .. ' ' .. time_format, self.timestamp)
-    if self.timestamp_end then
-      date = date .. '-' .. os.date(time_format, self.timestamp_end)
-    end
+  local date = tostring(os.date(format, self.timestamp))
+
+  if self:has_time() then
+    date = date .. ' ' .. self:format_time()
   end
 
   if #self.adjustments > 0 then
@@ -324,7 +349,7 @@ end
 
 ---@return string
 function Date:format_time()
-  if self.date_only then
+  if not self:has_time() then
     return ''
   end
   local t = self:format(time_format)
@@ -570,6 +595,25 @@ function Date:is_obsolete_range_end()
   return self.is_date_range_end and self.related_date_range:is_same(self, 'day')
 end
 
+---@return boolean
+function Date:has_date_range_end()
+  return self.related_date_range and self.is_date_range_start
+end
+
+function Date:has_time()
+  return not self.date_only
+end
+
+---@return boolean
+function Date:has_time_range()
+  return self.timestamp_end ~= nil
+end
+
+---@return Date|nil
+function Date:get_date_range_end()
+  return self:has_date_range_end() and self.related_date_range or nil
+end
+
 ---Return number of days for a date range
 ---@return number
 function Date:get_date_range_days()
@@ -611,11 +655,16 @@ function Date:format(format)
 end
 
 ---@param from Date
----@param span? string
+---@param span? 'day' | 'minute'
 ---@return number
 function Date:diff(from, span)
   span = span or 'day'
-  local diff = self:start_of(span).timestamp - from:start_of(span).timestamp
+  local to_date = self:start_of(span)
+  local from_date = from:start_of(span)
+  local diff = to_date.timestamp - from_date.timestamp
+  if to_date.is_dst ~= from_date.is_dst then
+    diff = diff + (to_date.is_dst and 3600 or -3600)
+  end
   local durations = {
     day = 86400,
     minute = 60,
@@ -909,6 +958,7 @@ return {
   from_string = from_string,
   now = now,
   today = today,
+  tomorrow = tomorrow,
   parse_all_from_line = parse_all_from_line,
   is_valid_date = is_valid_date,
   is_date_instance = is_date_instance,

@@ -1,6 +1,8 @@
 local config = require('orgmode.config')
+local Template = require('orgmode.capture.template')
 local Date = require('orgmode.objects.date')
 local utils = require('orgmode.utils')
+
 local expansions = {
   ['%f'] = function()
     return vim.fn.expand('%')
@@ -34,13 +36,25 @@ local expansions = {
 ---@see https://orgmode.org/manual/Capture-templates.html
 
 ---@class Templates
----@field templates table<string, table>
+---@field templates table<string, Template>
 local Templates = {}
 
--- TODO Introduce type
-function Templates:new()
+function Templates:new(templates)
   local opts = {}
-  opts.templates = config.org_agenda_templates or config.org_capture_templates
+
+  vim.validate({
+    templates = { templates, 'table', true },
+  })
+
+  opts.templates = {}
+  for key, template in pairs(templates or config.org_capture_templates) do
+    if type(template) == 'table' then
+      opts.templates[key] = Template:new(template)
+    else
+      opts.templates[key] = template
+    end
+  end
+
   setmetatable(opts, self)
   self.__index = self
   return opts
@@ -55,11 +69,14 @@ function Templates:compile(template)
   if type(content) == 'table' then
     content = table.concat(content, '\n')
   end
-  content = self:_compile_dates(content)
-  content = self:_compile_expansions(content)
-  content = self:_compile_expressions(content)
-  content = self:_compile_prompts(content)
+  content = self:_compile(content)
   return vim.split(content, '\n', true)
+end
+
+---@param target string
+---@return string
+function Templates:compile_target(target)
+  return self:_compile(target)
 end
 
 function Templates:setup()
@@ -74,6 +91,17 @@ function Templates:setup()
       vim.cmd([[startinsert]])
     end
   end
+end
+
+---@private
+---@param content string
+---@return string
+function Templates:_compile(content)
+  content = self:_compile_dates(content)
+  content = self:_compile_expansions(content)
+  content = self:_compile_expressions(content)
+  content = self:_compile_prompts(content)
+  return content
 end
 
 ---@param content string
@@ -132,6 +160,7 @@ function Templates:_compile_expressions(content)
   for exp in content:gmatch('%%%b()') do
     local snippet = exp:match('%((.*)%)')
     local func = load(snippet)
+    ---@diagnostic disable-next-line: param-type-mismatch
     local ok, response = pcall(func)
     if ok then
       content = content:gsub(vim.pesc(exp), response)

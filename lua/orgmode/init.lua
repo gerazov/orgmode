@@ -40,7 +40,6 @@ function Org:init()
 end
 
 ---@param file? string
----@return string
 function Org:reload(file)
   self:init()
   return self.files.reload(file)
@@ -51,9 +50,8 @@ function Org:setup_autocmds()
   vim.api.nvim_create_autocmd('BufWritePost', {
     pattern = { '*.org', '*.org_archive' },
     group = org_augroup,
-    callback = function()
-      require('orgmode').reload(vim.fn.expand('<afile>:p'))
-      require('orgmode.org.diagnostics').report()
+    callback = function(event)
+      require('orgmode').reload(vim.fn.fnamemodify(event.file, ':p'))
     end,
   })
   vim.api.nvim_create_autocmd('FileType', {
@@ -85,11 +83,19 @@ local function check_ts_grammar()
       return
     end
     local parser_config = require('nvim-treesitter.parsers').get_parser_configs()
-    if parser_config and parser_config.org and parser_config.org.install_info.revision ~= ts_revision then
+    if parser_config and parser_config.org and parser_config.org.install_info.revision then
+      if parser_config.org.install_info.revision ~= ts_revision then
+        require('orgmode.utils').echo_error({
+          'You are using outdated version of tree-sitter grammar for Orgmode.',
+          'To use latest version, replace current grammar installation with "require(\'orgmode\').setup_ts_grammar()" and run :TSUpdate org.',
+          'More info in setup section of readme: https://github.com/nvim-orgmode/orgmode#setup',
+        })
+      end
+    else
       require('orgmode.utils').echo_error({
-        'You are using outdated version of tree-sitter grammar for Orgmode.',
-        'To use latest version, replace current grammar installation with "require(\'orgmode\').setup_ts_grammar()" and run :TSUpdate org.',
-        'More info in setup section of readme: https://github.com/nvim-orgmode/orgmode#setup',
+        'Cannot detect parser revision.',
+        "Please check your org grammar's install info.",
+        'Maybe you forgot to call "require(\'orgmode\').setup_ts_grammar()" before setup.',
       })
     end
   end, 200)
@@ -102,6 +108,7 @@ local function setup(opts)
   instance = Org:new()
   check_ts_grammar()
   local config = require('orgmode.config'):extend(opts)
+  config:setup_ts_predicates()
   vim.defer_fn(function()
     if config.notifications.enabled and #vim.api.nvim_list_uis() > 0 then
       require('orgmode.parser.files').load(vim.schedule_wrap(function()
@@ -114,7 +121,7 @@ local function setup(opts)
 end
 
 ---@param file? string
----@return Org
+---@return Org|nil
 local function reload(file)
   if not instance then
     return
@@ -138,7 +145,7 @@ local function set_dot_repeat(cmd, opts)
 end
 
 ---@param cmd string
----@param opts? table
+---@param opts? any
 local function action(cmd, opts)
   local parts = vim.split(cmd, '.', true)
   if not instance or #parts < 2 then

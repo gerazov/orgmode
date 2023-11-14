@@ -44,6 +44,7 @@ local helps = {
     { key = 'org_forward_heading_same_level', description = 'Go to next heading on same level' },
     { key = 'org_backward_heading_same_level', description = 'Go to previous heading on same level' },
     { key = 'outline_up_heading', description = 'Go to parent heading' },
+    { key = 'org_insert_link', description = 'Insert a hyperlink' },
     { key = 'org_deadline', description = 'Insert/Update deadline date' },
     { key = 'org_schedule', description = 'Insert/Update scheduled date' },
     { key = 'org_time_stamp', description = 'Insert date under cursor' },
@@ -275,7 +276,7 @@ function Help.prepare_content(opts)
 
   local prepare_func = Help['_prepare_' .. t]
   if not prepare_func then
-    return
+    return {}
   end
 
   local content, include_generic = prepare_func(mappings, max_height)
@@ -322,7 +323,7 @@ function Help.show(opts)
     height = math.min(#content + 1, vim.o.lines - 2),
     anchor = 'NW',
     style = 'minimal',
-    border = 'single',
+    border = config.win_border,
     row = 5,
     col = vim.o.columns / 4,
   }

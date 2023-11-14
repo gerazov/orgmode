@@ -1,4 +1,3 @@
-local ts = require('vim.treesitter.query')
 local ts_utils = require('nvim-treesitter.ts_utils')
 local Promise = require('orgmode.utils.promise')
 local uv = vim.loop
@@ -7,32 +6,58 @@ local debounce_timers = {}
 local query_cache = {}
 local tmp_window_augroup = vim.api.nvim_create_augroup('OrgTmpWindow', { clear = true })
 
----@param file string
----@param callback function
----@param as_string? boolean
-function utils.readfile(file, callback, as_string)
-  uv.fs_open(file, 'r', 438, function(err1, fd)
-    if err1 then
-      return callback(err1)
-    end
-    uv.fs_fstat(fd, function(err2, stat)
-      if err2 then
-        return callback(err2)
+function utils.readfile(file, opts)
+  opts = opts or {}
+  return Promise.new(function(resolve, reject)
+    uv.fs_open(file, 'r', 438, function(err1, fd)
+      if err1 then
+        return reject(err1)
       end
-      uv.fs_read(fd, stat.size, 0, function(err3, data)
-        if err3 then
-          return callback(err3)
+      uv.fs_fstat(fd, function(err2, stat)
+        if err2 then
+          return reject(err2)
         end
-        uv.fs_close(fd, function(err4)
-          if err4 then
-            return callback(err4)
+        uv.fs_read(fd, stat.size, 0, function(err3, data)
+          if err3 then
+            return reject(err3)
           end
-          local lines = data
-          if not as_string then
-            lines = vim.split(data, '\n')
+          uv.fs_close(fd, function(err4)
+            if err4 then
+              return reject(err4)
+            end
+            if opts.raw then
+              return resolve(data)
+            end
+            local lines = vim.split(data, '\n')
             table.remove(lines, #lines)
+            return resolve(lines)
+          end)
+        end)
+      end)
+    end)
+  end)
+end
+
+function utils.writefile(file, data)
+  return Promise.new(function(resolve, reject)
+    uv.fs_open(file, 'w', 438, function(err1, fd)
+      if err1 then
+        return reject(err1)
+      end
+      uv.fs_fstat(fd, function(err2, stat)
+        if err2 then
+          return reject(err2)
+        end
+        uv.fs_write(fd, data, nil, function(err3, bytes)
+          if err3 then
+            return reject(err3)
           end
-          return callback(nil, lines)
+          uv.fs_close(fd, function(err4)
+            if err4 then
+              return reject(err4)
+            end
+            return resolve(bytes)
+          end)
         end)
       end)
     end)
@@ -40,34 +65,34 @@ function utils.readfile(file, callback, as_string)
 end
 
 function utils.open(target)
-  if vim.fn.executable('xdg-open') then
+  if vim.fn.executable('xdg-open') == 1 then
     return vim.fn.system(string.format('xdg-open %s', target))
   end
 
-  if vim.fn.executable('open') then
+  if vim.fn.executable('open') == 1 then
     return vim.fn.system(string.format('open %s', target))
   end
 
-  if vim.fn.has('win32') then
+  if vim.fn.has('win32') == 1 then
     return vim.fn.system(string.format('start "%s"', target))
   end
 end
 
----@param msg string
+---@param msg string|table
 ---@param additional_msg? table
 ---@param store_in_history? boolean
 function utils.echo_warning(msg, additional_msg, store_in_history)
   return utils._echo(msg, 'WarningMsg', additional_msg, store_in_history)
 end
 
----@param msg string
+---@param msg string|table
 ---@param additional_msg? table
 ---@param store_in_history? boolean
 function utils.echo_error(msg, additional_msg, store_in_history)
   return utils._echo(msg, 'ErrorMsg', additional_msg, store_in_history)
 end
 
----@param msg string
+---@param msg string|table
 ---@param additional_msg? table
 ---@param store_in_history? boolean
 function utils.echo_info(msg, additional_msg, store_in_history)
@@ -144,27 +169,33 @@ function utils.concat(first, second, unique)
   return first
 end
 
-function utils.menu(title, items, prompt)
-  local content = { title .. '\\n' .. string.rep('-', #title) }
-  local valid_keys = {}
-  for _, item in ipairs(items) do
-    if item.separator then
-      table.insert(content, string.rep(item.separator or '-', item.length or 80))
-    else
-      valid_keys[item.key] = item
-      table.insert(content, string.format('%s %s', item.key, item.label))
+---@class KeymapData
+---@field mode string|table
+---@field lhs string
+---@field buffer integer?
+
+---@param data KeymapData
+---@return table? map Mapping definition
+function utils.get_keymap(data)
+  local find_keymap = function(list)
+    for _, map in ipairs(list) do
+      if map.lhs == data.lhs then
+        return map
+      end
     end
   end
-  prompt = prompt or 'key'
-  table.insert(content, prompt .. ': ')
-  vim.cmd(string.format('echon "%s"', table.concat(content, '\\n')))
-  local char = vim.fn.nr2char(vim.fn.getchar())
-  vim.cmd([[redraw!]])
-  local entry = valid_keys[char]
-  if not entry or not entry.action then
-    return
+
+  local keymap = nil
+
+  if data.buffer then
+    keymap = find_keymap(vim.api.nvim_buf_get_keymap(data.buffer, data.mode))
   end
-  return entry.action()
+
+  if not keymap then
+    keymap = find_keymap(vim.api.nvim_get_keymap(data.mode))
+  end
+
+  return keymap
 end
 
 function utils.esc(cmd)
@@ -226,7 +257,7 @@ function utils.humanize_minutes(minutes)
 end
 
 ---@param query string
----@param node table
+---@param node userdata
 ---@param file_content string[]
 ---@param file_content_str string
 ---@return table[]
@@ -234,7 +265,7 @@ function utils.get_ts_matches(query, node, file_content, file_content_str)
   local matches = {}
   local ts_query = query_cache[query]
   if not ts_query then
-    ts_query = ts.parse_query('org', query)
+    ts_query = vim.treesitter.query.parse('org', query)
     query_cache[query] = ts_query
   end
   for _, match, _ in ts_query:iter_matches(node, file_content_str) do
@@ -296,9 +327,9 @@ function utils.get_node_text(node, content)
   end
 end
 
----@param node table
+---@param node userdata
 ---@param type string
----@return table
+---@return userdata | nil
 function utils.get_closest_parent_of_type(node, type, accept_at_cursor)
   local parent = node
 
@@ -398,18 +429,9 @@ function utils.choose(items)
   end
 end
 
----@param fn function
----@return Promise
-function utils.promisify(fn)
-  if getmetatable(fn) ~= Promise then
-    return Promise.resolve(fn)
-  end
-  return fn
-end
-
 ---@param file File
 ---@param parent_node userdata
----@param children_names string[]
+---@param children_names table<string, boolean>
 ---@return table
 function utils.get_named_children_nodes(file, parent_node, children_names)
   local child_node_info = {}
@@ -495,7 +517,8 @@ end
 ---@param name string
 ---@param height number
 ---@param split_mode string|function|table
-function utils.open_window(name, height, split_mode)
+---@param border string|table
+function utils.open_window(name, height, split_mode, border)
   local cmd_by_split_mode = {
     horizontal = string.format('%dsplit %s', height, name),
     vertical = string.format('vsplit %s', name),
@@ -524,19 +547,19 @@ function utils.open_window(name, height, split_mode)
   end
 
   if split_mode == 'float' then
-    return utils.open_float(name)
+    return utils.open_float(name, { border = border })
   end
 
   if type(split_mode) == 'table' and split_mode[1] == 'float' then
-    return utils.open_float(name, split_mode[2])
+    return utils.open_float(name, { scale = split_mode[2], border = border })
   end
 
   return vim.cmd(string.format('%s %s', split_mode, name))
 end
 
-function utils.open_tmp_org_window(height, split_mode, on_close)
+function utils.open_tmp_org_window(height, split_mode, border, on_close)
   local winnr = vim.api.nvim_get_current_win()
-  utils.open_window(vim.fn.tempname(), height or 16, split_mode)
+  utils.open_window(vim.fn.tempname(), height or 16, split_mode, border)
   vim.cmd([[setf org]])
   vim.cmd([[setlocal bufhidden=wipe nobuflisted nolist noswapfile nofoldenable]])
   vim.api.nvim_buf_set_var(0, 'org_prev_window', winnr)
@@ -567,11 +590,13 @@ function utils.open_tmp_org_window(height, split_mode, on_close)
 end
 
 ---@param name string
----@param scale? number
-function utils.open_float(name, scale)
-  scale = scale or 0.7
+---@param opts? table
+function utils.open_float(name, opts)
+  opts = opts or { scale = nil, border = nil }
+  opts.scale = opts.scale or 0.7
+  opts.border = opts.border or 'single'
   -- Make sure number is between 0 and 1
-  scale = math.min(math.max(0, scale), 1)
+  local scale = math.min(math.max(0, opts.scale), 1)
   local bufnr = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_name(bufnr, name)
 
@@ -587,7 +612,7 @@ function utils.open_float(name, scale)
     row = row,
     col = col,
     style = 'minimal',
-    border = 'rounded',
+    border = opts.border,
   })
 end
 
@@ -599,6 +624,37 @@ function utils.pad_right(str, amount)
     return str
   end
   return string.format('%s%s', str, string.rep(' ', spaces))
+end
+
+---@param filename string
+function utils.edit_file(filename)
+  local buf_not_already_loaded = vim.fn.bufexists(filename) ~= 1
+  local cur_win = vim.api.nvim_get_current_win()
+
+  return {
+    open = function()
+      local bufnr = vim.fn.bufadd(filename)
+      vim.api.nvim_open_win(bufnr, true, {
+        relative = 'editor',
+        width = 1,
+        -- TODO: Revert to 1 once the https://github.com/neovim/neovim/issues/19464 is fixed
+        height = 2,
+        row = 99999,
+        col = 99999,
+        zindex = 1,
+        style = 'minimal',
+      })
+    end,
+    close = function()
+      vim.cmd('silent! w')
+      if buf_not_already_loaded then
+        vim.cmd('silent! bw!')
+      else
+        vim.cmd('silent! q!')
+      end
+      vim.api.nvim_set_current_win(cur_win)
+    end,
+  }
 end
 
 return utils
